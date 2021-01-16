@@ -1,0 +1,192 @@
+#!/bin/bash
+################################################################################
+# Program:     hydrascp
+#
+#
+#                                              -+s:    o+                       
+#                                      `.:///::-``sm/` .N:                      
+#      -yhs/-.-+o+:.   `.+o          `-/:-:+ydMMMNdMMmo-+M+                     
+#     -MMMMMMMNyssMMNmmNmo`           `/ymMMMMMMMMMMMMMMNNMh:`                  
+#     `///sdMMMMMNMMMMMMdyo+-`      `oNMMMMMMMMhsssymMMMMMMMMNy-                
+#           -yMMMMMNMMMMMMMMNy+:.  /dyMMMMMMMd.      .+mMMMM+/mM/               
+#            `.yy+` `.:sNMMMMMms. .-`/MMMMMMMo         -MMMMMNsMm-              
+#                       .hMMMMMdds`  yMMMMMMMd`        .NMMMMMMMMMh+.           
+#                        `NMMMMMy:+` hMMMMMMMMh.       .`-:/+shNMMMMM+          
+#                         dMMMMMMm`` sMNMMMMMMMN+`     s/`     `-yMMM:          
+#                        .MMMMMMyM.  .my/mMMMMMMMNho/-``/hho/--.` :s:           
+#                        sMMMMMMyy`   .y.`+NMMMMMMMMMMMNNmNMMMMMMd/             
+#      .`               /MMMMMMMh`     .++oooyMMMMMMMMMMMMMMMMd+oyMdo/::-`      
+#      `yy` `:++:.     `mMMMMMoMo      ` -ohNMMMMMMMMMMMdshNMMMMMMMMMMMMMh      
+#       sMosNNyss+:`  `:MMMMMd.y`     `:dMMMMMMMNyNMMMMMM: .mMMMMMmdddNMMM`     
+#     `/MMMMMMMMMNmh+.`oMMMMMo       `yMMMMMMMd/` .mMMMMMN` `oo:.   ` `:+-      
+#    `sMMMMMMNMMMMMMN+`+MMMMM+      .s/hMMMMMs     -MMMMMM+  ``-:-` `:N`        
+#   `mdsMMM+` `sMMMMMhs:MMMMMd      ` yMMMMMM-      NMMMMMs   `-/yNmyyM+        
+#   .MhMMMMo    NMMMMN:`yMMMMMs      .MMMMMMMd.    `MMMMMMo .ohNMMMMMMMMy-      
+#  -dMMNh+-`   .MMMMMMd `dMMMMMh.    .MMMMMMMMN+`  oMMMMMM/`:sNMMMNhhNMMmmh`    
+# -MMMs.      `dMMMMmdh  `hMMMMMMs-  `hm+NMMMMMMm:/MMMMMMM-.dMMMMh`  +MMMyN/    
+#  /ho        yMMMMM:y.    +NMMMMMMdo-`h..dMMMMMMMMMMMMMMM./mMMMMs   -oymMMMs-  
+#            `mMMMMM.`      `omMMMMMMMNys-`dMMMMMMMMMMMMMh .MMMMMM:      .oNMh  
+#             dMMMMMs `        :yMMMMMMMMMNmMMMMMMMMMMMMM: `hyNMMMMo       -/`  
+#            `-MMMMMMm+.`        :MMMMMMMMMMMMMMMMMMMMMMy  ``+:MMMMM`           
+#              :NMMMMMMMNdyo+/:-.:MMMMMMMMMMMMMMMMMMMMMh`     :MMMMm`           
+#               .yMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMy`  `-+yMMMMN-            
+#                 .+hNMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMNhdmNMMMMMMMy.             
+#           .//:`  /yhmMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMmy/               
+#         -hMMMMmo:.+MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMNNN::o+-`   `soos/`
+#-+` `hs/-/:dMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMdy+/ho//Ms
+#syosdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddh-
+################################################################################
+# Author:      Shawn Qureshi
+################################################################################
+# Description: Got bandwidth but limited per thread? We can help.
+#
+# Dependencies: This requires the unique secretautoscp.exp expect file to run.
+#               It also requires the 'expect' package installed.
+################################################################################
+#version="0.01"
+################################################################################
+#
+# Change Log:  0.01  - Well, good luck with that...
+#              0.01b - Ready for beatings.
+#              0.01a - Script <- Not Yours.
+#
+################################################################################
+
+# Our typical help stuff:
+if [ $1 == "-h" ] || [ $1 == "--h" ] || [ $1 == "-help" ] || [ $1 == "--help" ]; then
+  echo "Usage: hydrascp <source_file> <[user@]destination:/path> [binding_address]"
+  exit 1
+fi
+
+EXPECT=`which expect`
+
+# This is the name of our companion expect file:
+SFILE="secretautoscp.exp"
+
+# Check for expect:
+if [ -z $EXPECT ]; then
+  echo "Error: You need the 'expect' program installed."
+  exit 1
+fi
+
+# Check for our companion expect script:
+if [ ! -f $SFILE ]; then
+  ASCP=`which $SFILE`
+  if [ -z $ASCP ]; then
+    echo "Missing $SFILE, please add here or in PATH"
+    exit 1
+  fi
+else
+  ASCP="./$SFILE"
+fi
+
+# Make sure we can actually execute it:
+if [ ! -x $ASCP ]; then
+  echo "Error: $ASCP is not executable, use 'chmod +x'"
+  exit 1
+fi
+
+
+if [ -z "$1" ]; then
+  echo "You need to supply a source file"
+  exit 1
+fi
+
+if [ -z "$2" ]; then
+  echo "You need to supply user@destination:/path"
+  exit 1
+fi
+
+options=""
+if [ -z "$3" ]; then
+  echo "Binding not specified, using default interface"
+else
+  options="-o BindAddress=$3"
+fi
+
+if [ ! -f "$1" ]; then 
+  echo "Error: Source is not a file"
+  exit 1
+fi
+
+# Filesystem check here to make sure there's enough space for the chunks:
+if [ `stat --printf="%s" $1` -gt `df -PhB1 . | awk 'NR==2 {print $4}'` ]; then
+  echo "Error: Not enough free space in this directory, you can 'cd' elsewhere or free up space"
+  exit 1
+fi
+
+# Our timestamp is used mainly for unique file names:
+timestamp=`date +%s`
+
+# Our number of chunks to distribute here:
+chunks=16
+
+# We create this key to hide your password from being seen in plaintext anywhere:
+secret=$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 32 | head -n 1)
+
+# Get user password here:
+echo -n "Password: "
+read -s password
+echo " "
+
+# Encrypt password with openssl with the secret:
+encpass=$(echo $password | openssl enc -base64 -e -aes-256-cbc -nosalt -pass "pass:'$secret'")
+
+# Create expect file here, using same random secret key for openssl decrypt
+TFILE=`echo $SFILE.$timestamp|sed 's/.exp//g;s/$/.exp/'`
+# Decrypt with `openssl enc -base64 -d -aes-256-cbc -nosalt -pass "pass:'$secret'"`
+sed "s/INSERT_SECRET_HERE/$secret/" $SFILE > $TFILE
+chmod +x $TFILE
+
+echo "Splitting $1 into chunks of $chunks..."
+split -d -a 6 -n $chunks "$1" "$1.$timestamp.part"
+
+echo "Compressing chunks..."
+for i in `ls $1.$timestamp.part*`; do
+  tar --remove-files -czf $i.tar.gz $i
+done
+
+PIDARRAY=()
+
+echo "Transferring chunks simultaenously..."
+for i in `ls $1.$timestamp.part*`; do
+  ./$TFILE $encpass $i $2 "$options" &
+  PIDARRAY+=($!)
+  sleep 1
+done
+
+# We set up a wait here to make sure the array of PIDs is clear:
+n=0
+NEWARRAY=$PIDARRAY
+while [ $n -eq 0 ]; do
+  # Exit when all pids are closed:
+  if [ ${#NEWARRAY[@]} -eq 0 ]; then
+    n=1
+  fi
+  PIDARRAY=$NEWARRAY
+  NEWARRAY=()
+  for pid in ${PIDARRAY[@]}; do
+    ps -ef|awk '{print $2}'|egrep -E "^$pid$" > /dev/null 2>&1
+    if [ $? -eq 0 ]; then
+      NEWARRAY+=($pid)
+    fi
+  done
+  sleep 1
+done
+
+echo "Generating MD5 for validation:"
+for i in `ls $1.$timestamp.part*`; do
+  md5sum "$i"
+done
+
+echo "Cleaning up..."
+rm -rf $1.$timestamp.part*
+rm -rf $TFILE
+
+echo "All done."
+echo "On the destination server, you will want to compare MD5 to validate:"
+echo "md5sum $1.$timestamp.part*"
+echo "Then if they match the above MD5 output, you will want to uncompress the files:"
+echo "tar -xvzf $1.$timestamp.part*"
+echo "Then you will need to assemble them at the destination:"
+echo "for i in \`ls $1.$timestamp.part*\`; do cat $i >> $1; rm -rf $i; done"
